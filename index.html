@@ -62,6 +62,16 @@
     border: 1px solid var(--border); background: var(--card); border-radius: 10px;
     padding: 8px 12px; font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap;
   }
+  .demo-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--ready-bg); color: var(--ready); border-radius: 12px; padding: 8px 10px 8px 14px; margin-bottom: 12px;
+  }
+  .demo-tag { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+  .demo-clock { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); min-width: 52px; }
+  .demo-track { flex: 1; min-width: 120px; height: 6px; border-radius: 4px; background: rgba(127,127,127,0.2); overflow: hidden; }
+  .demo-track i { display: block; height: 100%; background: var(--ready); }
+  .demo-done { font-size: 0.78rem; font-weight: 600; }
+  .demo-bar .btn { padding: 6px 12px; font-size: 0.8rem; }
   .phase-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .ptile {
     border-radius: 12px; padding: 10px 12px; cursor: pointer; border: 1px solid transparent;
@@ -396,18 +406,41 @@
   }
   function writeJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 
-  const settings = Object.assign({ sound: true, demoOffset: 0 }, readJSON(SET_KEY, {}));
+  const settings = Object.assign({ sound: true, demo: null }, readJSON(SET_KEY, {}));
+  delete settings.demoOffset; // replaced by demo mode
+
+  // Demo mode: plays 7:00 → 12:00 in 100 real seconds (180× speed).
+  // Timers run on the same sped-up clock. Demo ticks live in their own
+  // practice list, so a real morning on this tablet is never touched.
+  const DEMO_FROM = "07:00", DEMO_TO = "12:00", DEMO_SECONDS = 100;
+  const DEMO_SPEED = (hm(DEMO_TO) - hm(DEMO_FROM)) * 60 / DEMO_SECONDS;
+  function demoBase() { const d = new Date(); d.setHours(0, hm(DEMO_FROM), 0, 0); return d.getTime(); }
+  function demoEnd() { return demoBase() + (hm(DEMO_TO) - hm(DEMO_FROM)) * 60000; }
   function saveSettings() { writeJSON(SET_KEY, settings); }
 
-  function now() { return Date.now() + (settings.demoOffset || 0); }
+  function now() {
+    if (!settings.demo) return Date.now();
+    return Math.min(demoEnd(), demoBase() + (Date.now() - settings.demo.startReal) * DEMO_SPEED);
+  }
+  function demoProgress() { return (now() - demoBase()) / (demoEnd() - demoBase()); }
+  function startDemo() {
+    settings.demo = { startReal: Date.now() }; saveSettings();
+    day = freshDay(); saveDay(); ui.sheet = null; ui.openDone.clear(); lastSig = ""; render();
+    toast("Demo: 7:00 → 12:00 in 100 seconds. Tick tasks as it plays.");
+  }
+  function stopDemo() {
+    settings.demo = null; saveSettings();
+    day = readJSON(dayStoreKey(), null); ensureToday(); ui.openDone.clear(); lastSig = ""; render();
+  }
   function dateKey(ms) { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
   function freshDay() { return { date: dateKey(now()), done: {}, notes: [], weather: "terrace" }; }
 
-  let day = readJSON(DAY_KEY, null);
+  function dayStoreKey() { return settings.demo ? DAY_KEY + "_demo" : DAY_KEY; }
+  let day = readJSON(dayStoreKey(), null);
   function ensureToday() {
     if (!day || day.date !== dateKey(now())) { day = freshDay(); saveDay(); }
   }
-  function saveDay() { writeJSON(DAY_KEY, day); }
+  function saveDay() { writeJSON(dayStoreKey(), day); }
 
   // =====================================================================
   // Time helpers
@@ -522,7 +555,7 @@
   // =====================================================================
   // Rendering
   // =====================================================================
-  const ui = { sheet: null, flash: null };
+  const ui = { sheet: null, flash: null, openDone: new Set() };
 
   function render() {
     ensureToday();
@@ -533,9 +566,17 @@
 
     app.innerHTML = `
       <header class="top">
+        ${settings.demo ? `<div class="demo-bar">
+          <span class="demo-tag">Demo</span>
+          <span class="demo-clock" data-democlock>${fmtTime(now())}</span>
+          <div class="demo-track"><i data-demoprog style="width:${demoProgress() * 100}%"></i></div>
+          <span class="demo-done" data-demodone>${demoProgress() >= 1 ? "Finished" : "100 s = one morning"}</span>
+          <button class="btn" data-demorestart>Restart</button>
+          <button class="btn" data-demoexit>Exit demo</button>
+        </div>` : ""}
         <div class="title-row">
           <h1>Bar opening</h1>
-          <div class="date">${escapeHtml(dateStr)}${settings.demoOffset ? ` · <span style="color:var(--accent)">demo time ${fmtTime(now())}</span>` : ""}</div>
+          <div class="date">${escapeHtml(dateStr)}</div>
           <button class="icon-btn" data-act="notes">+ Note for SM</button>
           <button class="icon-btn" data-act="settings" aria-label="Settings">⚙︎</button>
         </div>
@@ -604,7 +645,7 @@
             <button data-weather="inside" class="${day.weather === "inside" ? "on" : ""}">☂︎ Back big</button></span>` : ""}
         </div>
         ${open.length ? `<div class="grid">${open.map(([t, s]) => renderTask(t, s, st.s)).join("")}</div>` : ""}
-        ${done.length ? `<details class="done-list"><summary>${open.length ? `Done (${done.length})` : `All ${done.length} done ✓ (tap to see or undo)`}</summary>
+        ${done.length ? `<details class="done-list" data-phase="${p.id}" ${ui.openDone.has(String(p.id)) ? "open" : ""}><summary>${open.length ? `Done (${done.length})` : `All ${done.length} done ✓ (tap to see or undo)`}</summary>
           ${done.map(([t, s]) => `<div class="done-row"><span class="tick">✓</span><span class="nm">${escapeHtml(t.name)}</span><time>${fmtTime(s.doneAt)}</time><button data-reopen="${t.id}">Undo</button></div>`).join("")}
         </details>` : ""}
       </section>`;
@@ -691,9 +732,8 @@
       html = `${back}<h1>Settings</h1>
         <div class="set-row"><div>Chime when a timer finishes<small>Plays a soft sound when e.g. the tea is ready.</small></div>
           <button class="btn" data-togglesound>${settings.sound ? "On" : "Off"}</button></div>
-        <div class="set-row"><div>Demo time<small>Pretend it's another time of day to see the colours change. Timers follow it too.</small></div>
-          <div style="display:flex;gap:6px;align-items:center"><input type="time" id="demo-time" value="${(() => { const d = new Date(now()); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; })()}">
-          ${settings.demoOffset ? `<button class="btn" data-realtime>Real time</button>` : ""}</div></div>
+        <div class="set-row"><div>Demo mode<small>Plays the whole morning, 7:00 → 12:00, in 100 seconds. Timers speed up too (the tea brews in 4 s). Uses a separate practice list: today's real ticks are kept.</small></div>
+          ${settings.demo ? `<button class="btn" data-demoexit>Exit demo</button>` : `<button class="btn primary" data-demostart>▶ Start demo</button>`}</div>
         <div class="set-row"><div>Start the day over<small>Clears today's ticks and notes on this tablet. It also resets automatically each morning.</small></div>
           <button class="btn danger" data-reset>${ui.sheet.confirmReset ? "Tap again to confirm" : "Reset today"}</button></div>`;
     }
@@ -706,15 +746,10 @@
     if (save) save.onclick = () => { const v = document.getElementById("note-text").value.trim(); if (v) addNote(v); };
     const snd = root.querySelector("[data-togglesound]");
     if (snd) snd.onclick = () => { settings.sound = !settings.sound; saveSettings(); if (settings.sound) { unlockAudio(); chime(); } renderSheet(); };
-    const dt = root.querySelector("#demo-time");
-    if (dt) dt.onchange = () => {
-      if (!dt.value) return;
-      const [h, m] = dt.value.split(":").map(Number);
-      const target = new Date(); target.setHours(h, m, 0, 0);
-      settings.demoOffset = target.getTime() - Date.now(); saveSettings(); render();
-    };
-    const rt = root.querySelector("[data-realtime]");
-    if (rt) rt.onclick = () => { settings.demoOffset = 0; saveSettings(); render(); };
+    const ds = root.querySelector("[data-demostart]");
+    if (ds) ds.onclick = () => { unlockAudio(); startDemo(); };
+    const dx = root.querySelector("[data-demoexit]");
+    if (dx) dx.onclick = () => { ui.sheet = null; stopDemo(); };
     const rs = root.querySelector("[data-reset]");
     if (rs) rs.onclick = () => {
       if (!ui.sheet.confirmReset) { ui.sheet.confirmReset = true; renderSheet(); return; }
@@ -742,6 +777,11 @@
     q("[data-delnote]", el => { day.notes.splice(Number(el.dataset.delnote), 1); saveDay(); render(); });
     q("[data-act=notes]", () => openSheet({ type: "notes" }));
     q("[data-act=settings]", () => openSheet({ type: "settings" }));
+    q("[data-demorestart]", () => startDemo());
+    q("[data-demoexit]", () => stopDemo());
+    document.querySelectorAll("details[data-phase]").forEach(el => el.addEventListener("toggle", () => {
+      if (el.open) ui.openDone.add(el.dataset.phase); else ui.openDone.delete(el.dataset.phase);
+    }));
   }
 
   // =====================================================================
@@ -785,12 +825,13 @@
   document.addEventListener("pointerdown", unlockAudio, { once: true });
 
   // =====================================================================
-  // Heartbeat: update countdowns every second; re-render when a timer
-  // finishes, the minute changes (phase colours) or the day rolls over.
+  // Heartbeat: update countdowns 4× a second; re-render only when a timer
+  // finishes, a phase changes colour, or the day rolls over.
   // =====================================================================
   let lastSig = "";
   function signature() {
-    return dateKey(now()) + "|" + minutesOfDay(now()) + "|" + TASKS.map(t => taskState(t).status).join(",");
+    return dateKey(now()) + "|" + PHASES.map(p => phaseStatus(p).s).join(",") + TASKS.map(t => isLater(t) ? "L" : "").join("")
+      + "|" + TASKS.map(t => taskState(t).status).join(",");
   }
   function heartbeat() {
     const sig = signature();
@@ -807,6 +848,12 @@
       if (!typing) render();
       return;
     }
+    const clock = document.querySelector("[data-democlock]");
+    if (clock) {
+      clock.textContent = fmtTime(now());
+      document.querySelector("[data-demoprog]").style.width = Math.min(100, demoProgress() * 100) + "%";
+      document.querySelector("[data-demodone]").textContent = demoProgress() >= 1 ? "Finished" : "100 s = one morning";
+    }
     document.querySelectorAll("[data-until]").forEach(el => {
       const until = Number(el.dataset.until);
       if (el.tagName === "I") el.style.width = Math.min(100, ((now() - Number(el.dataset.from)) / (until - Number(el.dataset.from))) * 100) + "%";
@@ -817,7 +864,7 @@
   ensureToday();
   render();
   lastSig = signature();
-  setInterval(heartbeat, 1000);
+  setInterval(heartbeat, 250);
 })();
 </script>
 </body>
