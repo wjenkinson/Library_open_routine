@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bar Opening</title>
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Bar%20Opening%22%2C%22short_name%22%3A%22Opening%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f7f6f4%22%2C%22theme_color%22%3A%22%23f7f6f4%22%7D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Opening">
+<meta name="theme-color" content="#f7f6f4">
+<style>
+  :root {
+    --bg: #f7f6f4;
+    --card: #ffffff;
+    --border: #e4e1db;
+    --text: #1c1b19;
+    --text-dim: #6b6862;
+    --accent: #b5502f;
+    --accent-text: #ffffff;
+    --track: #ece9e3;
+    /* Phase status — soft, never alarming */
+    --ok: #3f7d4f;      --ok-bg: #e8f3ea;
+    --warn: #a3622a;    --warn-bg: #fcecd9;
+    --late: #a54b3e;    --late-bg: #f8e1dc;
+    --done: #7a766f;    --done-bg: #efedea;
+    --ready: #2f6f8f;   --ready-bg: #e3f0f6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171614; --card: #221f1c; --border: #37332d; --text: #f0ede7; --text-dim: #9c988f;
+      --accent: #d97a4f; --accent-text: #1c1b19; --track: #2c2925;
+      --ok: #8fcf9f;   --ok-bg: #1e2b21;
+      --warn: #e8ad6c; --warn-bg: #33281a;
+      --late: #eb9a8a; --late-bg: #36221e;
+      --done: #9c988f; --done-bg: #26231f;
+      --ready: #8cc4e0; --ready-bg: #1a2a33;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171614; --card: #221f1c; --border: #37332d; --text: #f0ede7; --text-dim: #9c988f;
+    --accent: #d97a4f; --accent-text: #1c1b19; --track: #2c2925;
+    --ok: #8fcf9f;   --ok-bg: #1e2b21;
+    --warn: #e8ad6c; --warn-bg: #33281a;
+    --late: #eb9a8a; --late-bg: #36221e;
+    --done: #9c988f; --done-bg: #26231f;
+    --ready: #8cc4e0; --ready-bg: #1a2a33;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); -webkit-tap-highlight-color: transparent; }
+  body { padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+  button { font: inherit; color: inherit; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 16px 64px; }
+
+  /* Header */
+  header.top { position: sticky; top: 0; background: var(--bg); z-index: 5; padding: 6px 0 12px; }
+  .title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  h1 { font-size: 1.4rem; margin: 0; letter-spacing: -0.01em; }
+  .date { color: var(--text-dim); font-size: 0.9rem; flex: 1; }
+  .icon-btn {
+    border: 1px solid var(--border); background: var(--card); border-radius: 10px;
+    padding: 8px 12px; font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .phase-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .ptile {
+    border-radius: 12px; padding: 10px 12px; cursor: pointer; border: 1px solid transparent;
+    text-align: left; background: var(--done-bg); color: var(--done);
+  }
+  .ptile .pn { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; opacity: 0.85; }
+  .ptile .pt { font-size: 1rem; font-weight: 700; margin: 2px 0 6px; color: var(--text); }
+  .ptile .pbar { height: 5px; border-radius: 4px; background: rgba(127,127,127,0.18); overflow: hidden; }
+  .ptile .pbar i { display: block; height: 100%; background: currentColor; border-radius: 4px; }
+  .ptile .ps { font-size: 0.74rem; font-weight: 600; margin-top: 6px; display: flex; justify-content: space-between; gap: 6px; }
+  .s-ok   { background: var(--ok-bg);   color: var(--ok); }
+  .s-warn { background: var(--warn-bg); color: var(--warn); }
+  .s-late { background: var(--late-bg); color: var(--late); }
+  .s-done { background: var(--done-bg); color: var(--done); }
+
+  /* Up next */
+  .upnext { margin-top: 12px; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+  .upnext::-webkit-scrollbar { display: none; }
+  .un-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; align-self: center; white-space: nowrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+    background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+    padding: 7px 12px; font-size: 0.84rem; cursor: pointer;
+  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+  .chip.ready { background: var(--ready-bg); color: var(--ready); border-color: transparent; font-weight: 600; }
+  .chip.timer { color: var(--text-dim); }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip.ready b { color: inherit; }
+
+  /* Notes */
+  .notes { margin-top: 12px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; font-size: 0.85rem; }
+  .notes .nh { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; margin-bottom: 4px; }
+  .note-row { display: flex; gap: 8px; padding: 3px 0; align-items: baseline; }
+  .note-row time { color: var(--text-dim); font-size: 0.75rem; min-width: 38px; }
+  .note-row span { flex: 1; }
+  .note-row button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; }
+
+  /* Phases */
+  section.phase { margin-top: 22px; scroll-margin-top: 190px; }
+  .phase-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .phase-head h2 { font-size: 1.05rem; margin: 0; }
+  .phase-head .goal { font-size: 0.82rem; color: var(--text-dim); flex: 1; min-width: 160px; }
+  .pill { font-size: 0.74rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: var(--card); }
+  .seg button { border: none; background: none; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: var(--text-dim); }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
+
+  .grid { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @media (min-width: 760px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1060px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+  .task {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+    border-left: 4px solid var(--border); scroll-margin-top: 200px;
+  }
+  .task.ph-ok   { border-left-color: var(--ok); }
+  .task.ph-warn { border-left-color: var(--warn); }
+  .task.ph-late { border-left-color: var(--late); }
+  .task.is-ready { box-shadow: 0 0 0 2px var(--ready) inset; border-left-color: var(--ready); }
+  .task.flash { animation: flash 1.2s ease; }
+  @keyframes flash { 0%,100% { background: var(--card); } 30% { background: var(--ready-bg); } }
+  .task-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .task-name { font-weight: 650; font-size: 1rem; }
+  .task-sub { font-size: 0.8rem; color: var(--text-dim); margin-top: 2px; line-height: 1.35; }
+  .tag { display: inline-block; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 999px; background: var(--track); color: var(--text-dim); margin-left: 6px; vertical-align: 2px; }
+  .badge { font-size: 0.74rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .badge.ready { background: var(--ready-bg); color: var(--ready); }
+  .badge.wait { background: var(--track); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+  .steps { list-style: none; margin: 0; padding: 0; font-size: 0.82rem; }
+  .steps li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; color: var(--text-dim); }
+  .steps li.done { text-decoration: line-through; text-decoration-color: var(--border); }
+  .steps li .n { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--border); flex: none; font-size: 0.66rem; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; transform: translateY(3px); }
+  .steps li.done .n { background: var(--ok); border-color: var(--ok); color: var(--card); }
+  .steps li.cur { color: var(--text); font-weight: 600; }
+  .steps li.cur .n { border-color: var(--accent); color: var(--accent); }
+  .steps li .undo { margin-left: auto; background: none; border: none; color: var(--text-dim); font-size: 0.74rem; text-decoration: underline; cursor: pointer; padding: 0; }
+
+  .waitbox { background: var(--track); border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; }
+  .waitbox .row { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .waitbox .cd { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .waitbox .bar { height: 5px; background: rgba(127,127,127,0.2); border-radius: 4px; margin-top: 6px; overflow: hidden; }
+  .waitbox .bar i { display: block; height: 100%; background: var(--ready); }
+  .waitbox .skip { background: none; border: none; color: var(--text-dim); text-decoration: underline; font-size: 0.74rem; cursor: pointer; padding: 0; }
+
+  button.do {
+    width: 100%; padding: 12px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-weight: 650; font-size: 0.92rem;
+    cursor: pointer; text-align: left; display: flex; gap: 10px; align-items: center;
+  }
+  button.do .ck { width: 20px; height: 20px; border-radius: 6px; border: 2px solid currentColor; flex: none; opacity: 0.9; }
+  button.do.hot { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button.do:disabled { background: var(--card); color: var(--text-dim); border-color: var(--border); cursor: default; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .checks button {
+    border: 1px solid var(--border); background: var(--card); border-radius: 10px;
+    padding: 9px 12px; font-size: 0.86rem; font-weight: 600; cursor: pointer; display: inline-flex; gap: 7px; align-items: center;
+  }
+  .checks button .ck { width: 16px; height: 16px; border-radius: 5px; border: 2px solid var(--border); }
+  .checks button.on { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+  .checks button.on .ck { background: var(--ok); border-color: var(--ok); }
+  .task-foot { display: flex; gap: 8px; flex-wrap: wrap; }
+  .link-btn { border: none; background: none; padding: 2px 0; font-size: 0.8rem; font-weight: 600; color: var(--accent); cursor: pointer; }
+
+  .done-list { margin-top: 10px; background: var(--card); border: 1px dashed var(--border); border-radius: 12px; padding: 4px 12px; }
+  .done-list summary { cursor: pointer; font-size: 0.82rem; color: var(--text-dim); font-weight: 600; padding: 8px 0; }
+  .done-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--border); font-size: 0.86rem; }
+  .done-row .tick { color: var(--ok); font-weight: 700; }
+  .done-row .nm { flex: 1; }
+  .done-row time { color: var(--text-dim); font-size: 0.75rem; }
+  .done-row button { background: none; border: none; color: var(--text-dim); font-size: 0.75rem; text-decoration: underline; cursor: pointer; }
+  .all-done { font-size: 0.88rem; color: var(--done); background: var(--done-bg); padding: 10px 12px; border-radius: 10px; }
+
+  /* Sheets */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 20; display: flex; justify-content: flex-end; }
+  .sheet {
+    background: var(--bg); width: min(560px, 100%); height: 100%; overflow-y: auto;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 40px; box-shadow: -8px 0 24px rgba(0,0,0,0.15);
+  }
+  .sheet h1 { margin: 6px 0 4px; }
+  .sheet .kicker { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
+  .sheet h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 22px 0 8px; }
+  .sheet ul, .sheet ol { margin: 0; padding-left: 20px; line-height: 1.55; font-size: 0.93rem; }
+  .sheet li { margin-bottom: 4px; }
+  .sheet p { line-height: 1.55; font-size: 0.93rem; }
+  .back-btn { background: none; border: none; color: var(--accent); font-size: 0.95rem; font-weight: 600; padding: 4px 0; cursor: pointer; }
+  .callout { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.9rem; line-height: 1.5; margin-top: 10px; }
+  .callout.idea { border-left: 4px solid var(--ready); }
+  .callout.warn { border-left: 4px solid var(--warn); }
+  .sheet .act-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+  .btn { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 10px 14px; font-weight: 600; font-size: 0.88rem; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.danger { color: var(--late); }
+  .quick { display: flex; flex-wrap: wrap; gap: 8px; }
+  textarea, input[type="time"] {
+    width: 100%; font: inherit; color: var(--text); background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.95rem;
+  }
+  input[type="time"] { width: auto; }
+  .set-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
+  .set-row small { display: block; color: var(--text-dim); font-size: 0.78rem; margin-top: 2px; }
+  table.ing { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  table.ing td { padding: 5px 0; border-bottom: 1px solid var(--border); }
+  table.ing td:last-child { text-align: right; color: var(--text-dim); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 8px 8px 8px 16px; border-radius: 999px; font-size: 0.85rem;
+    z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.2s; display: flex; gap: 12px; align-items: center;
+    max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: 1; pointer-events: auto; }
+  .toast button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 999px; padding: 3px 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+  .toast button:empty { display: none; }
+
+  @media (max-width: 640px) {
+    .phase-strip { grid-template-columns: 1fr 1fr; }
+    section.phase, .task { scroll-margin-top: 270px; }
+    header.top { position: static; }
+    .title-row { flex-wrap: wrap; }
+    .title-row h1 { flex: 1; }
+    .date { order: 5; flex-basis: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="sheet-root"></div>
+<div class="toast" id="toast"><span id="toast-msg"></span><button id="toast-btn"></button></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // =====================================================================
+  // THE ROUTINE — edit this section to change the opening.
+  //
+  // Phase colours: green until `warn`, orange until `late`, then soft red.
+  // A finished phase turns grey regardless of the time.
+  //
+  // Each task has ONE of:
+  //   steps:  [...]  — done in order. A step with `wait` (minutes) starts a
+  //                    countdown when ticked; the task comes back as "Ready"
+  //                    with its next step when the countdown ends.
+  //   checks: [...]  — independent ticks in any order (e.g. a station).
+  //   (neither)      — a single "Done" tick.
+  // `{DLC}` anywhere in the text is replaced with today + 3 days.
+  // =====================================================================
+  const PHASES = [
+    { id: 1, name: "Set up",      goal: "Open for business.",                                      warn: "07:20", late: "07:30" },
+    { id: 2, name: "Drinks prep", goal: "Hard deadline 11:30 for lunch. If nothing else gets done, this does.", warn: "08:30", late: "09:00" },
+    { id: 3, name: "Bar prep",    goal: "Important, but not lunch-limiting. Listed by importance.", warn: "10:00", late: "10:30" },
+    { id: 4, name: "Extras",      goal: "Protects lunch: if there's a rush at 12:00, waiters won't have time to set the stations.", warn: "11:30", late: "12:00" },
+  ];
+
+  const TASKS = [
+    // ---------------- Phase 1: Set up ----------------
+    { id: "glass", phase: 1, name: "Recycle the glass", sub: "Last week's bottles to the glass deposit",
+      learn: { done: ["All of last week's empty bottles are in the glass deposit.", "The empties area is clear for this week."] } },
+    { id: "windows", phase: 1, name: "Open the terrace windows" },
+    { id: "lights", phase: 1, name: "Lights & music on",
+      learn: { done: ["Bar, room and terrace lights on.", "Music playing at morning volume."] } },
+    { id: "cupwasher", phase: 1, name: "Turn on the cup washer",
+      learn: { tips: ["Do this early. It needs time to fill and heat while you do everything else."] } },
+    { id: "milk", phase: 1, name: "Turn on the milk machine" },
+    { id: "terrace", phase: 1, name: "Set up the terrace", sub: "Ash trays, beer mats, salt beds",
+      learn: {
+        done: ["Every terrace table has an ash tray and beer mats.", "One salt bed per terrace."],
+        tips: ["Windy day? Dress the tables down: leave the beer mats off and keep anything light inside, otherwise you'll be picking them up off the street."],
+      } },
+    { id: "hopper", phase: 1, name: "Coffee hopper full",
+      learn: { done: ["Hopper filled to the top, not just \"enough for now\"."], tips: ["Refilling in the middle of a rush is the worst time to do it. Top it up even if it looks half full."] } },
+
+    // ---------------- Phase 2: Drinks prep ----------------
+    { id: "icetea", phase: 2, name: "Ice tea", sub: "1 reservoir + 5 jugs", first: true, fiche: "icetea",
+      steps: [
+        { label: "Brew 12 tea bags in 2 L boiling water", wait: 12, waitLabel: "Brewing" },
+        { label: "Remove the bags, put the tea in the fridge", wait: 60, waitLabel: "Cooling" },
+        { label: "Make up the reservoir (cold tea only!)" },
+        { label: "Fill 5 jugs → fridge" },
+      ],
+      learn: {
+        why: "The long one: about 1 h 15 min, mostly waiting. Start it first and the countdown does the remembering for you.",
+        done: ["Reservoir full, on its stand, with lemon & lime slices.", "5 jugs filled and in the fridge.", "DLC {DLC} on the reservoir and every jug."],
+        tips: [
+          "The tea must be fridge-cold before it goes near the glass reservoir or the ice. See \"Reservoir care\" below.",
+          "Order for the reservoir: 5 L cold water first, then peach syrup and lemon juice, then the cooled tea, ice last.",
+        ],
+        reservoir: true,
+      } },
+    { id: "lemonade", phase: 2, name: "Lemonade", sub: "1 reservoir + 5 jugs", fiche: "lemonade",
+      steps: [
+        { label: "Mix in the 8 L jar: 5 L water, 35 cl lime, 35 cl lemon, 1 L sugar syrup" },
+        { label: "Add 5 lemon + 5 lime slices and a pint of ice" },
+        { label: "Fill 5 jugs → fridge" },
+      ],
+      learn: {
+        done: ["Reservoir full, on its stand, with lemon & lime slices.", "5 jugs filled and in the fridge.", "DLC {DLC} on the reservoir and every jug."],
+        tips: ["Uses 1 L of sugar syrup, so swap in yesterday's syrup first (Sugar syrup task)."],
+        reservoir: true,
+      } },
+    { id: "kombucha", phase: 2, name: "Kombucha", sub: "2 × 2 L bottles",
+      learn: { done: ["2 full 2 L bottles cold in the fridge, labelled DLC {DLC}."] } },
+    { id: "syrup", phase: 2, name: "Sugar syrup", sub: "Made today for tomorrow",
+      steps: [
+        { label: "Put yesterday's syrup into service" },
+        { label: "Make tomorrow's: 1 bag of sugar in 2 L water" },
+        { label: "Label DLC & store" },
+      ],
+      learn: {
+        why: "Syrup is always made a day ahead, so the batch you use today was made yesterday.",
+        done: ["Yesterday's batch is on the bar (check its DLC).", "Today's batch: 1 bag of sugar fully dissolved in 2 L water, labelled {DLC}, stored for tomorrow."],
+        tips: ["Stir until there are no crystals left at the bottom. Undissolved sugar makes the next lemonade weaker.", "If you use hot water to dissolve it, let it cool before you bottle and store it."],
+      } },
+    { id: "dlc", phase: 2, name: "DLC labels on everything", sub: "Today's prep → DLC {DLC}",
+      learn: {
+        why: "DLC = date limite de consommation. Everything made today gets 3 days.",
+        done: ["Lemonade reservoir + 5 jugs", "Ice tea reservoir + 5 jugs", "Kombucha bottles", "New sugar syrup", "All say {DLC}"],
+        tips: ["While you're in the fridge, check for anything past its DLC and throw it out."],
+      } },
+
+    // ---------------- Phase 3: Bar prep ----------------
+    { id: "limes", phase: 3, name: "Limes", sub: "1 metal + 1 plastic container", checks: ["Metal", "Plastic"] },
+    { id: "lemons", phase: 3, name: "Lemons", sub: "1 metal + 1 plastic container", checks: ["Metal", "Plastic"] },
+    { id: "mint", phase: 3, name: "Mint", sub: "1 container" },
+    { id: "cucumber", phase: 3, name: "Cucumber", sub: "1 container" },
+    { id: "raspberry", phase: 3, name: "Raspberries", sub: "1 container" },
+    { id: "grapefruit", phase: 3, name: "Grapefruit", sub: "1 container" },
+    { id: "orange", phase: 3, name: "Orange", sub: "1 container" },
+    { id: "straws", phase: 3, name: "Refill straws & sugar", checks: ["Straws", "Sugar"] },
+    { id: "martini", phase: 3, name: "Martini trays", sub: "Made fresh every day", checks: ["Salt", "Salt + sugar", "Chilli flakes"],
+      learn: { done: ["Three trays, made fresh today, not topped up from yesterday."] } },
+
+    // ---------------- Phase 4: Extras ----------------
+    { id: "st-office", phase: 4, name: "Office station", checks: ["Glasses", "Cutlery", "Menus"], learn: { station: true } },
+    { id: "st-front", phase: 4, name: "Front big station", checks: ["Glasses", "Cutlery", "Menus"], learn: { station: true } },
+    { id: "st-back", phase: 4, name: "Back big station", weather: "inside", checks: ["Glasses", "Cutlery", "Menus"], learn: { station: true } },
+    { id: "st-terrace", phase: 4, name: "Terrace station", weather: "terrace", checks: ["Glasses", "Cutlery", "Menus"], learn: { station: true } },
+    { id: "carafes", phase: 4, name: "Carafes", sub: "Lots of them. Do this near the end.", lateFrom: "11:00",
+      learn: { why: "Done last so they're fresh for the 12:00 rush." } },
+  ];
+
+  const STATION_LEARN = {
+    done: ["Glasses stocked.", "Cutlery refilled.", "Menus in place (they may have been done the night before; check anyway)."],
+    tips: ["Terrace or back big station depends on the weather. Switch it at the top of Extras."],
+  };
+
+  const RESERVOIR_CARE = {
+    rules: [
+      "Glass cracks from sudden temperature changes (thermal shock), not from being cold. Hot tea + ice, or a hot rinse on a cold jar, is what breaks them.",
+      "Never put anything warm in the reservoir, and never add ice to anything warm. Wait the full hour for the tea to cool.",
+      "Wash by hand in lukewarm water. If a jar comes out of a hot washer, let it get back to room temperature before you fill it with anything cold.",
+      "Put the jar on its stand empty, then fill it. 8 L is about 8 kg: lift from the bottom, never by the lid, clip or tap.",
+      "Tap: hand-tight only. Over-tightening stresses the glass around the hole.",
+    ],
+    idea: "Idea to try (check with the manager first): cool the brewed tea in a metal jug sitting in a bowl of ice water. Metal doesn't mind the shock, and it cools in roughly 15–20 min instead of an hour. Only pour it into the glass once it's properly cold.",
+  };
+
+  const FICHES = {
+    lemonade: {
+      title: "Home made lemonade",
+      ingredients: [["Water", "5 L"], ["Pulco lime juice", "35 cl"], ["Pulco lemon juice", "35 cl"], ["Sugar syrup", "1 L"], ["Lemon, round slices", "5"], ["Lime, round slices", "5"], ["Ice", "1 pint"]],
+      prep: [
+        "Mix the lemon juice, lime juice, water and sugar syrup together in the 8 litre kilner jar.",
+        "Add slices of lemon & lime into the jar with 1 pint of ice for service.",
+        "Serve in rocks glass with 3 ice cubes & a small straw.",
+      ],
+    },
+    icetea: {
+      title: "Iced tea",
+      ingredients: [["Water", "7 L"], ["English breakfast tea bags", "12"], ["Pulco lemon juice", "20 cl"], ["Peach syrup", "70 cl"], ["Lemon, round slices", "5"], ["Lime, round slices", "5"], ["Ice", "1 pint"]],
+      prep: [
+        "Brew 12 English breakfast tea bags in 2 litres of boiling water for 12 minutes. After 12 minutes remove the tea bags and place the brewed tea into the fridge to cool down. This will take 1 hour.",
+        "For service: mix 5 litres of cold water, 70 cl of peach syrup, 20 cl of lemon juice, slices of lemon & lime, the 2 litres of brewed tea and a pint of ice in the kilner jar, stir.",
+        "Serve in rocks glass with 3 ice cubes & a small straw.",
+      ],
+    },
+  };
+
+  const QUICK_NOTES = ["Bar left dirty", "Piles of deliveries", "Busy with customers", "Short on stock", "Machine problem", "Alone this morning"];
+
+  // =====================================================================
+  // Storage — one record per day, kept on this tablet only.
+  // =====================================================================
+  const DAY_KEY = "bar_open_day_v1";
+  const SET_KEY = "bar_open_settings_v1";
+
+  function readJSON(k, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(k)); return v && typeof v === "object" ? v : fallback; } catch (e) { return fallback; }
+  }
+  function writeJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  const settings = Object.assign({ sound: true, demoOffset: 0 }, readJSON(SET_KEY, {}));
+  function saveSettings() { writeJSON(SET_KEY, settings); }
+
+  function now() { return Date.now() + (settings.demoOffset || 0); }
+  function dateKey(ms) { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+  function freshDay() { return { date: dateKey(now()), done: {}, notes: [], weather: "terrace" }; }
+
+  let day = readJSON(DAY_KEY, null);
+  function ensureToday() {
+    if (!day || day.date !== dateKey(now())) { day = freshDay(); saveDay(); }
+  }
+  function saveDay() { writeJSON(DAY_KEY, day); }
+
+  // =====================================================================
+  // Time helpers
+  // =====================================================================
+  function minutesOfDay(ms) { const d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); }
+  function hm(str) { const [h, m] = str.split(":").map(Number); return h * 60 + m; }
+  function fmtTime(ms) { const d = new Date(ms); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`; }
+  function fmtCountdown(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+  }
+  function dlcDate() {
+    const d = new Date(now()); d.setDate(d.getDate() + 3);
+    return d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
+  }
+  function fill(s) { return escapeHtml(s || "").replace(/\{DLC\}/g, `<b>${escapeHtml(dlcDate())}</b>`); }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  // =====================================================================
+  // State derivation
+  // =====================================================================
+  function mode(t) { return t.steps ? "seq" : t.checks ? "check" : "single"; }
+  function items(t) { return t.steps || (t.checks ? t.checks.map(c => ({ label: c })) : [{ label: "Done" }]); }
+  function visible(t) { return !t.weather || t.weather === day.weather; }
+  function rec(t) { return day.done[t.id] || {}; }
+
+  function taskState(t) {
+    const d = rec(t), its = items(t), n = its.length;
+    const count = Object.keys(d).length;
+    const times = Object.values(d);
+    if (count >= n) return { status: "done", doneAt: Math.max(...times) };
+    if (mode(t) === "seq" && count > 0) {
+      const prev = its[count - 1];
+      if (prev.wait) {
+        const from = d[count - 1], until = from + prev.wait * 60000;
+        if (now() < until) return { status: "waiting", next: count, from, until, label: prev.waitLabel || "Waiting" };
+        return { status: "ready", next: count };
+      }
+    }
+    return { status: count ? "started" : "todo", next: count };
+  }
+
+  function phaseStatus(p) {
+    const ts = TASKS.filter(t => t.phase === p.id && visible(t));
+    const done = ts.filter(t => taskState(t).status === "done").length;
+    let s;
+    if (done === ts.length) s = "done";
+    else {
+      const m = minutesOfDay(now());
+      s = m >= hm(p.late) ? "late" : m >= hm(p.warn) ? "warn" : "ok";
+    }
+    return { s, done, total: ts.length };
+  }
+  const STATUS_WORD = { ok: "On track", warn: "Time to move on", late: "Could use a hand", done: "Done" };
+
+  function isLater(t) { return t.lateFrom && minutesOfDay(now()) < hm(t.lateFrom); }
+
+  function upNext() {
+    const out = [];
+    for (const t of TASKS) if (visible(t) && taskState(t).status === "ready") out.push({ t, kind: "ready" });
+    for (const p of PHASES) {
+      if (phaseStatus(p).s === "done") continue;
+      const cands = TASKS.filter(t => t.phase === p.id && visible(t)).filter(t => ["todo", "started"].includes(taskState(t).status));
+      const pick = cands.find(t => t.first) || cands.find(t => taskState(t).status === "started") || cands.find(t => !isLater(t)) ;
+      if (pick) out.push({ t: pick, kind: "next" });
+    }
+    const timers = TASKS.filter(t => visible(t) && taskState(t).status === "waiting").map(t => ({ t, kind: "timer" }));
+    return out.slice(0, 4).concat(timers);
+  }
+
+  // =====================================================================
+  // Actions
+  // =====================================================================
+  let lastAction = null;
+
+  function tick(t, idx) {
+    ensureToday();
+    const d = day.done[t.id] = day.done[t.id] || {};
+    if (d[idx] != null) { delete d[idx]; lastAction = null; saveDay(); render(); return; }
+    d[idx] = now();
+    if (!Object.keys(d).length) delete day.done[t.id];
+    saveDay();
+    lastAction = { id: t.id, idx };
+    const it = items(t)[idx];
+    const label = mode(t) === "single" ? t.name : `${t.name}: ${it.label}`;
+    toast(it.wait ? `${label} ✓ · ${it.waitLabel || "Timer"} ${it.wait} min started` : `${label} ✓`, "Undo", undoLast);
+    unlockAudio();
+    render();
+  }
+  function undoLast() {
+    if (!lastAction) return;
+    const d = day.done[lastAction.id];
+    if (d) { delete d[lastAction.idx]; if (!Object.keys(d).length) delete day.done[lastAction.id]; }
+    lastAction = null; saveDay(); hideToast(); render();
+  }
+  function undoStep(t) {
+    const d = rec(t); const keys = Object.keys(d).map(Number);
+    if (!keys.length) return;
+    if (mode(t) === "seq") delete d[Math.max(...keys)];
+    else for (const k of keys) delete d[k];
+    if (!Object.keys(d).length) delete day.done[t.id];
+    saveDay(); render();
+  }
+  function skipWait(t) {
+    const s = taskState(t); if (s.status !== "waiting") return;
+    const prev = items(t)[s.next - 1];
+    day.done[t.id][s.next - 1] = now() - prev.wait * 60000;
+    saveDay(); render();
+  }
+
+  // =====================================================================
+  // Rendering
+  // =====================================================================
+  const ui = { sheet: null, flash: null };
+
+  function render() {
+    ensureToday();
+    const app = document.getElementById("app");
+    const scrollY = window.scrollY;
+    const dateStr = new Date(now()).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    const ps = PHASES.map(p => [p, phaseStatus(p)]);
+
+    app.innerHTML = `
+      <header class="top">
+        <div class="title-row">
+          <h1>Bar opening</h1>
+          <div class="date">${escapeHtml(dateStr)}${settings.demoOffset ? ` · <span style="color:var(--accent)">demo time ${fmtTime(now())}</span>` : ""}</div>
+          <button class="icon-btn" data-act="notes">+ Note for SM</button>
+          <button class="icon-btn" data-act="settings" aria-label="Settings">⚙︎</button>
+        </div>
+        <div class="phase-strip">
+          ${ps.map(([p, st]) => `
+            <button class="ptile s-${st.s}" data-goto="${p.id}">
+              <div class="pn">Phase ${p.id}</div>
+              <div class="pt">${escapeHtml(p.name)}</div>
+              <div class="pbar"><i style="width:${st.total ? (st.done / st.total) * 100 : 0}%"></i></div>
+              <div class="ps"><span>${STATUS_WORD[st.s]}</span><span>${st.done}/${st.total}</span></div>
+            </button>`).join("")}
+        </div>
+        ${renderUpNext()}
+      </header>
+      <main>
+        ${renderNotes()}
+        ${ps.map(([p, st]) => renderPhase(p, st)).join("")}
+        ${ps.every(([, st]) => st.s === "done") ? `<p class="all-done" style="margin-top:24px">Opening complete. Nice work. Enjoy lunch service.</p>` : ""}
+      </main>
+    `;
+    window.scrollTo(0, scrollY);
+    wire();
+    if (ui.flash) {
+      const el = document.getElementById("task-" + ui.flash);
+      if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("flash"); }
+      ui.flash = null;
+    }
+    renderSheet();
+  }
+
+  function renderUpNext() {
+    const list = upNext();
+    if (!list.length) return "";
+    return `<div class="upnext"><span class="un-label">Up next</span>${list.map(({ t, kind }) => {
+      const s = taskState(t);
+      const ph = phaseStatus(PHASES[t.phase - 1]).s;
+      if (kind === "timer") return `<button class="chip timer" data-flash="${t.id}">⏳ ${escapeHtml(t.name)} · ${escapeHtml(s.label.toLowerCase())} <span class="cd" data-until="${s.until}">${fmtCountdown(s.until - now())}</span></button>`;
+      const step = mode(t) === "seq" ? items(t)[s.next].label : null;
+      if (kind === "ready") return `<button class="chip ready" data-flash="${t.id}"><span class="dot"></span><b>${escapeHtml(t.name)}</b> ready: ${escapeHtml(step)}</button>`;
+      return `<button class="chip" data-flash="${t.id}" style="color:var(--${ph})"><span class="dot"></span><b>${escapeHtml(t.name)}</b>${step && s.next > 0 ? `<span style="color:var(--text-dim)">${escapeHtml(step)}</span>` : ""}</button>`;
+    }).join("")}</div>`;
+  }
+
+  function renderNotes() {
+    if (!day.notes.length) return "";
+    return `<div class="notes"><div class="nh">Notes for SM</div>${day.notes.map((n, i) => `
+      <div class="note-row"><time>${fmtTime(n.ts)}</time><span>${escapeHtml(n.text)}</span><button data-delnote="${i}" aria-label="Remove note">✕</button></div>`).join("")}</div>`;
+  }
+
+  function renderPhase(p, st) {
+    const ts = TASKS.filter(t => t.phase === p.id && visible(t)).map(t => [t, taskState(t)]);
+    const order = { ready: 0, started: 1, todo: 2, waiting: 3 };
+    const open = ts.filter(([, s]) => s.status !== "done")
+      .map((x, i) => [x, i])
+      .sort((a, b) => (order[a[0][1].status] - order[b[0][1].status]) || ((isLater(a[0][0]) ? 1 : 0) - (isLater(b[0][0]) ? 1 : 0)) || a[1] - b[1])
+      .map(([x]) => x);
+    const done = ts.filter(([, s]) => s.status === "done");
+    return `
+      <section class="phase" id="phase-${p.id}">
+        <div class="phase-head">
+          <h2>${p.id}. ${escapeHtml(p.name)}</h2>
+          <span class="pill s-${st.s}">${STATUS_WORD[st.s]}</span>
+          <span class="goal">${escapeHtml(p.goal)}</span>
+          ${p.id === 4 ? `<span class="seg" role="group" aria-label="Weather">
+            <button data-weather="terrace" class="${day.weather === "terrace" ? "on" : ""}">☀︎ Terrace</button>
+            <button data-weather="inside" class="${day.weather === "inside" ? "on" : ""}">☂︎ Back big</button></span>` : ""}
+        </div>
+        ${open.length ? `<div class="grid">${open.map(([t, s]) => renderTask(t, s, st.s)).join("")}</div>` : ""}
+        ${done.length ? `<details class="done-list"><summary>${open.length ? `Done (${done.length})` : `All ${done.length} done ✓ (tap to see or undo)`}</summary>
+          ${done.map(([t, s]) => `<div class="done-row"><span class="tick">✓</span><span class="nm">${escapeHtml(t.name)}</span><time>${fmtTime(s.doneAt)}</time><button data-reopen="${t.id}">Undo</button></div>`).join("")}
+        </details>` : ""}
+      </section>`;
+  }
+
+  function renderTask(t, s, phaseS) {
+    const m = mode(t), its = items(t), d = rec(t);
+    let badge = "";
+    if (s.status === "ready") badge = `<span class="badge ready">Ready</span>`;
+    else if (s.status === "waiting") badge = `<span class="badge wait">⏳ <span data-until="${s.until}">${fmtCountdown(s.until - now())}</span></span>`;
+    else if (isLater(t)) badge = `<span class="badge wait">Later</span>`;
+
+    let body = "";
+    if (m === "seq") {
+      body += `<ol class="steps">${its.map((it, i) => {
+        const cls = d[i] != null ? "done" : i === s.next ? "cur" : "";
+        const undo = d[i] != null && i === s.next - 1 ? `<button class="undo" data-undostep="${t.id}">undo</button>` : "";
+        return `<li class="${cls}"><span class="n">${d[i] != null ? "✓" : i + 1}</span><span>${fill(it.label)}${it.wait ? ` <span style="opacity:.7">(${it.wait} min)</span>` : ""}</span>${undo}</li>`;
+      }).join("")}</ol>`;
+      if (s.status === "waiting") {
+        const pct = Math.min(100, ((now() - s.from) / (s.until - s.from)) * 100);
+        body += `<div class="waitbox"><div class="row"><span>${escapeHtml(s.label)}… next: <b>${escapeHtml(its[s.next].label)}</b></span><span class="cd" data-until="${s.until}">${fmtCountdown(s.until - now())}</span></div>
+          <div class="bar"><i data-from="${s.from}" data-until="${s.until}" style="width:${pct}%"></i></div>
+          <div style="margin-top:6px"><button class="skip" data-skip="${t.id}">It's ready now</button></div></div>`;
+      } else {
+        body += `<button class="do ${s.next > 0 ? "hot" : ""}" data-tick="${t.id}" data-idx="${s.next}"><span class="ck"></span>${fill(its[s.next].label)}</button>`;
+      }
+    } else if (m === "check") {
+      body += `<div class="checks">${its.map((it, i) => `<button class="${d[i] != null ? "on" : ""}" data-tick="${t.id}" data-idx="${i}"><span class="ck"></span>${escapeHtml(it.label)}</button>`).join("")}</div>`;
+    } else {
+      body += `<button class="do" data-tick="${t.id}" data-idx="0"><span class="ck"></span>Done</button>`;
+    }
+
+    const hasLearn = t.learn || t.fiche;
+    return `
+      <div class="task ph-${phaseS} ${s.status === "ready" ? "is-ready" : ""}" id="task-${t.id}">
+        <div class="task-head">
+          <div>
+            <div class="task-name">${escapeHtml(t.name)}${t.first && s.status === "todo" ? `<span class="tag">Start first</span>` : ""}</div>
+            ${t.sub ? `<div class="task-sub">${fill(t.sub)}</div>` : ""}
+          </div>${badge}
+        </div>
+        ${body}
+        ${hasLearn ? `<div class="task-foot">
+          ${t.learn ? `<button class="link-btn" data-learn="${t.id}">Learn more</button>` : ""}
+          ${t.fiche ? `<button class="link-btn" data-fiche="${t.fiche}">Fiche technique</button>` : ""}
+        </div>` : ""}
+      </div>`;
+  }
+
+  // ---------------------------------------------------------------------
+  // Sheets: learn more, fiche technique, notes, settings
+  // ---------------------------------------------------------------------
+  function renderSheet() {
+    const root = document.getElementById("sheet-root");
+    if (!ui.sheet) { root.innerHTML = ""; return; }
+    let html = "";
+    const back = `<button class="back-btn" data-close>&larr; Back</button>`;
+    if (ui.sheet.type === "learn") {
+      const t = TASKS.find(x => x.id === ui.sheet.id);
+      const L = Object.assign({}, t.learn);
+      if (L.station) { L.done = STATION_LEARN.done; L.tips = STATION_LEARN.tips; }
+      html = `${back}<div class="kicker">Phase ${t.phase} · ${escapeHtml(PHASES[t.phase - 1].name)}</div><h1>${escapeHtml(t.name)}</h1>
+        ${t.sub ? `<p style="color:var(--text-dim);margin-top:0">${fill(t.sub)}</p>` : ""}
+        ${L.why ? `<p>${fill(L.why)}</p>` : ""}
+        ${t.steps ? `<h3>Steps</h3><ol>${t.steps.map(s => `<li>${fill(s.label)}${s.wait ? ` <i style="color:var(--text-dim)">then ${s.wait} min ${escapeHtml((s.waitLabel || "wait").toLowerCase())}</i>` : ""}</li>`).join("")}</ol>` : ""}
+        ${L.done ? `<h3>Done means</h3><ul>${L.done.map(x => `<li>${fill(x)}</li>`).join("")}</ul>` : ""}
+        ${L.tips ? `<h3>Tips</h3><ul>${L.tips.map(x => `<li>${fill(x)}</li>`).join("")}</ul>` : ""}
+        ${L.reservoir ? `<h3>Reservoir care</h3><ul>${RESERVOIR_CARE.rules.map(x => `<li>${fill(x)}</li>`).join("")}</ul><div class="callout idea">${fill(RESERVOIR_CARE.idea)}</div>` : ""}
+        ${t.fiche ? `<div class="act-row"><button class="btn primary" data-fiche="${t.fiche}">Open fiche technique</button></div>` : ""}`;
+    } else if (ui.sheet.type === "fiche") {
+      const f = FICHES[ui.sheet.id];
+      html = `${back}<div class="kicker">Fiche technique · SOP</div><h1>${escapeHtml(f.title)}</h1>
+        <h3>Ingredients</h3><table class="ing">${f.ingredients.map(([a, b]) => `<tr><td>${escapeHtml(a)}</td><td>${escapeHtml(b)}</td></tr>`).join("")}</table>
+        <h3>Preparation</h3><ol>${f.prep.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ol>
+        <div class="callout warn">Label everything DLC <b>${escapeHtml(dlcDate())}</b>.</div>`;
+    } else if (ui.sheet.type === "notes") {
+      html = `${back}<h1>Note for SM</h1><p style="color:var(--text-dim);margin-top:0">One tap is enough. Let the SM know why opening is slow so they can jump in.</p>
+        <div class="quick">${QUICK_NOTES.map(q => `<button class="btn" data-quick="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("")}</div>
+        <h3>Or write something</h3>
+        <textarea id="note-text" rows="3" placeholder="e.g. Ice machine making a noise"></textarea>
+        <div class="act-row"><button class="btn primary" data-savenote>Add note</button></div>`;
+    } else if (ui.sheet.type === "settings") {
+      html = `${back}<h1>Settings</h1>
+        <div class="set-row"><div>Chime when a timer finishes<small>Plays a soft sound when e.g. the tea is ready.</small></div>
+          <button class="btn" data-togglesound>${settings.sound ? "On" : "Off"}</button></div>
+        <div class="set-row"><div>Demo time<small>Pretend it's another time of day to see the colours change. Timers follow it too.</small></div>
+          <div style="display:flex;gap:6px;align-items:center"><input type="time" id="demo-time" value="${(() => { const d = new Date(now()); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; })()}">
+          ${settings.demoOffset ? `<button class="btn" data-realtime>Real time</button>` : ""}</div></div>
+        <div class="set-row"><div>Start the day over<small>Clears today's ticks and notes on this tablet. It also resets automatically each morning.</small></div>
+          <button class="btn danger" data-reset>${ui.sheet.confirmReset ? "Tap again to confirm" : "Reset today"}</button></div>`;
+    }
+    root.innerHTML = `<div class="scrim" data-scrim><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+    root.querySelectorAll("[data-close]").forEach(b => b.onclick = closeSheet);
+    root.querySelector("[data-scrim]").onclick = e => { if (e.target.hasAttribute("data-scrim")) closeSheet(); };
+    root.querySelectorAll("[data-fiche]").forEach(b => b.onclick = () => openSheet({ type: "fiche", id: b.dataset.fiche }));
+    root.querySelectorAll("[data-quick]").forEach(b => b.onclick = () => addNote(b.dataset.quick));
+    const save = root.querySelector("[data-savenote]");
+    if (save) save.onclick = () => { const v = document.getElementById("note-text").value.trim(); if (v) addNote(v); };
+    const snd = root.querySelector("[data-togglesound]");
+    if (snd) snd.onclick = () => { settings.sound = !settings.sound; saveSettings(); if (settings.sound) { unlockAudio(); chime(); } renderSheet(); };
+    const dt = root.querySelector("#demo-time");
+    if (dt) dt.onchange = () => {
+      if (!dt.value) return;
+      const [h, m] = dt.value.split(":").map(Number);
+      const target = new Date(); target.setHours(h, m, 0, 0);
+      settings.demoOffset = target.getTime() - Date.now(); saveSettings(); render();
+    };
+    const rt = root.querySelector("[data-realtime]");
+    if (rt) rt.onclick = () => { settings.demoOffset = 0; saveSettings(); render(); };
+    const rs = root.querySelector("[data-reset]");
+    if (rs) rs.onclick = () => {
+      if (!ui.sheet.confirmReset) { ui.sheet.confirmReset = true; renderSheet(); return; }
+      day = freshDay(); saveDay(); ui.sheet = null; render(); toast("Fresh start for today.");
+    };
+  }
+  function openSheet(s) { ui.sheet = s; renderSheet(); }
+  function closeSheet() { ui.sheet = null; renderSheet(); }
+  function addNote(text) {
+    ensureToday(); day.notes.push({ ts: now(), text }); saveDay();
+    ui.sheet = null; render(); toast("Note added for the SM.");
+  }
+
+  function wire() {
+    const q = (sel, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener("click", e => fn(el, e)));
+    q("[data-tick]", el => tick(TASKS.find(t => t.id === el.dataset.tick), Number(el.dataset.idx)));
+    q("[data-undostep]", el => undoStep(TASKS.find(t => t.id === el.dataset.undostep)));
+    q("[data-reopen]", el => undoStep(TASKS.find(t => t.id === el.dataset.reopen)));
+    q("[data-skip]", el => skipWait(TASKS.find(t => t.id === el.dataset.skip)));
+    q("[data-learn]", el => openSheet({ type: "learn", id: el.dataset.learn }));
+    q("[data-fiche]", el => openSheet({ type: "fiche", id: el.dataset.fiche }));
+    q("[data-flash]", el => { ui.flash = el.dataset.flash; render(); });
+    q("[data-goto]", el => document.getElementById("phase-" + el.dataset.goto).scrollIntoView({ behavior: "smooth", block: "start" }));
+    q("[data-weather]", el => { day.weather = el.dataset.weather; saveDay(); render(); });
+    q("[data-delnote]", el => { day.notes.splice(Number(el.dataset.delnote), 1); saveDay(); render(); });
+    q("[data-act=notes]", () => openSheet({ type: "notes" }));
+    q("[data-act=settings]", () => openSheet({ type: "settings" }));
+  }
+
+  // =====================================================================
+  // Toast
+  // =====================================================================
+  let toastTimer = null;
+  function toast(msg, btnLabel, onBtn) {
+    const t = document.getElementById("toast");
+    document.getElementById("toast-msg").textContent = msg;
+    const b = document.getElementById("toast-btn");
+    b.textContent = btnLabel || ""; b.onclick = onBtn || null;
+    t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, 4000);
+  }
+  function hideToast() { document.getElementById("toast").classList.remove("show"); }
+
+  // =====================================================================
+  // Chime + keep the tablet awake
+  // =====================================================================
+  let audioCtx = null, wakeLock = null;
+  function unlockAudio() {
+    try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {}
+    requestWake();
+  }
+  function chime() {
+    if (!settings.sound || !audioCtx) return;
+    try {
+      [0, 0.22].forEach((offset, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = "sine"; o.frequency.value = i ? 1046 : 784;
+        const t0 = audioCtx.currentTime + offset;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.9);
+        o.connect(g).connect(audioCtx.destination); o.start(t0); o.stop(t0 + 1);
+      });
+    } catch (e) {}
+  }
+  async function requestWake() {
+    try { if ("wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { requestWake(); render(); } });
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+
+  // =====================================================================
+  // Heartbeat: update countdowns every second; re-render when a timer
+  // finishes, the minute changes (phase colours) or the day rolls over.
+  // =====================================================================
+  let lastSig = "";
+  function signature() {
+    return dateKey(now()) + "|" + minutesOfDay(now()) + "|" + TASKS.map(t => taskState(t).status).join(",");
+  }
+  function heartbeat() {
+    const sig = signature();
+    if (sig !== lastSig) {
+      const before = lastSig.split("|")[2] || "";
+      const after = sig.split("|")[2];
+      if (before && before.split(",").some((st, i) => st === "waiting" && after.split(",")[i] === "ready")) {
+        chime();
+        const t = TASKS.find((x, i) => before.split(",")[i] === "waiting" && after.split(",")[i] === "ready");
+        if (t) toast(`${t.name} is ready: ${items(t)[taskState(t).next].label}`);
+      }
+      lastSig = sig;
+      const typing = document.activeElement && ["TEXTAREA", "INPUT"].includes(document.activeElement.tagName);
+      if (!typing) render();
+      return;
+    }
+    document.querySelectorAll("[data-until]").forEach(el => {
+      const until = Number(el.dataset.until);
+      if (el.tagName === "I") el.style.width = Math.min(100, ((now() - Number(el.dataset.from)) / (until - Number(el.dataset.from))) * 100) + "%";
+      else el.textContent = fmtCountdown(until - now());
+    });
+  }
+
+  ensureToday();
+  render();
+  lastSig = signature();
+  setInterval(heartbeat, 1000);
+})();
+</script>
+</body>
+</html>
