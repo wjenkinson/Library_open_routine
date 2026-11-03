@@ -21,7 +21,7 @@ Open `index.html` on the bar tablet ("Add to Home Screen" makes it full screen).
 - **DLC** dates are calculated automatically (today + 3 days).
 - **Note for SM**: one tap ("Bar left dirty", "Piles of deliveries", …) or free text.
 - **Weather switch** in Extras: terrace station or back big station.
-- **Settings ⚙︎**: chime on/off, *demo time* (to show the colours changing), reset today.
+- **Settings ⚙︎**: chime on/off, reset today, and **Demo mode**: plays 7:00 → 12:00 in 100 seconds (180× speed, timers included: the tea brews in 4 s and cools in 20 s). Demo ticks go into a separate practice list, so a real morning on the tablet is never touched.
 
 ## Changing the routine
 
